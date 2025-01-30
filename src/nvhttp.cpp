@@ -676,7 +676,7 @@ namespace nvhttp {
   void serverinfo(std::shared_ptr<typename SimpleWeb::ServerBase<T>::Response> response, std::shared_ptr<typename SimpleWeb::ServerBase<T>::Request> request) {
     print_req<T>(request);
 
-    int pair_status = 0;
+    int pair_status = 1;
     if constexpr (std::is_same_v<SunshineHTTPS, T>) {
       auto args = request->parse_query_string();
       auto clientID = args.find("uniqueid"s);
