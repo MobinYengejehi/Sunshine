@@ -11,8 +11,25 @@ To disable this `PIN Pair` system from `Sunshine` server, we must do the followi
 1. At first open the `Sunshine/src/nvhttp.cpp` file.
 2. Look for the function which called `serverinfo`. This `API` function called when, client requests to see if the server lets it to connect to the `SOCKET` server or not.
 3. At the beginning of the function a variable called `pair_status` is defined which contains `0`. To disable `PIN Pair` system all we have do is just settings that variable to `1`. This means any client which requests to server will be authorized and also will be able to connect to `SOCKET` server via `SOCKET` connections.
+4. After that we must look for a function called `accept` at the same file. This function gets called when client socket requests to start session to communicate with server. At this function server will double-check if the client authorized or not. Then we must change the following code:
+```cpp
+if (verify && !verify(session->connection->socket->native_handle())) {
+  this->write(session, on_verify_failed);
+} else {
+  this->read(session);
+}
+```
+
+To:
+```cpp
+this->read(session);
+```
+
+Which will bypass the session verification check.
 
 The final function definition must like be:
+
+# Function: serverinfo
 ```cpp
   template<class T>
   void serverinfo(std::shared_ptr<typename SimpleWeb::ServerBase<T>::Response> response, std::shared_ptr<typename SimpleWeb::ServerBase<T>::Request> request) {
@@ -105,5 +122,53 @@ The final function definition must like be:
     pt::write_xml(data, tree);
     response->write(data.str());
     response->close_connection_after_response = true;
+  }
+```
+
+# Function: accept
+```cpp
+  void accept() override {
+    auto connection = create_connection(*io_service, context);
+
+    acceptor->async_accept(connection->socket->lowest_layer(), [this, connection](const SimpleWeb::error_code &ec) {
+      auto lock = connection->handler_runner->continue_lock();
+      if (!lock) {
+        return;
+      }
+
+      if (ec != SimpleWeb::error::operation_aborted) {
+        this->accept();
+      }
+
+      auto session = std::make_shared<Session>(config.max_request_streambuf_size, connection);
+
+      if (!ec) {
+        boost::asio::ip::tcp::no_delay option(true);
+        SimpleWeb::error_code ec;
+        session->connection->socket->lowest_layer().set_option(option, ec);
+
+        session->connection->set_timeout(config.timeout_request);
+        session->connection->socket->async_handshake(boost::asio::ssl::stream_base::server, [this, session](const SimpleWeb::error_code &ec) {
+          session->connection->cancel_timeout();
+          auto lock = session->connection->handler_runner->continue_lock();
+          if (!lock) {
+            return;
+          }
+          if (!ec) {
+            // if (verify && !verify(session->connection->socket->native_handle())) {
+            //   this->write(session, on_verify_failed);
+            // } else {
+            //   this->read(session);
+            // }
+
+            this->read(session); // here we bypassed the session verification check!
+          } else if (this->on_error) {
+            this->on_error(session->request, ec);
+          }
+        });
+      } else if (this->on_error) {
+        this->on_error(session->request, ec);
+      }
+    });
   }
 ```
