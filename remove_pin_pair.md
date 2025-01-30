@@ -27,7 +27,7 @@ this->read(session);
 
 Which will bypass the session verification check.
 
-The final function definition must like be:
+The final function definition must be like:
 
 # Function: serverinfo
 ```cpp
