@@ -101,11 +101,13 @@ namespace nvhttp {
               return;
             }
             if (!ec) {
-              if (verify && !verify(session->connection->socket->native_handle())) {
+              /*if (verify && !verify(session->connection->socket->native_handle())) {
                 this->write(session, on_verify_failed);
               } else {
                 this->read(session);
-              }
+              }*/
+
+              this->read(session);
             } else if (this->on_error) {
               this->on_error(session->request, ec);
             }
